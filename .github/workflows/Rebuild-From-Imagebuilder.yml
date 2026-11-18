@@ -1,0 +1,118 @@
+#=================================================
+# 用已构建好的 imagebuilder 快速重出固件 (不需要重新编译)
+#
+# 背景: Openwrt-AutoBuild.yml 的 "Organize files" 步骤里,
+# 上游的 rm -rf kwrt-!(*imagebuilder*) 会把固件镜像一起删掉,
+# 导致 artifact / release 里只有 imagebuilder 与配置文件。
+# 编译已经完成, 直接拿 imagebuilder 出镜像只要几分钟。
+#=================================================
+
+name: Rebuild From Imagebuilder
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: '提供 imagebuilder 的那次 build run id'
+        required: true
+        default: '44303730913'
+      artifact_name:
+        description: 'artifact 名称'
+        required: true
+        default: '11.18_qualcommax_ipq60xx'
+      profile:
+        description: 'imagebuilder profile'
+        required: true
+        default: 'redmi_ax5-jdcloud'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    name: Rebuild ${{ inputs.profile }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: Install deps
+      run: |
+        sudo apt-get -qq update
+        sudo apt-get -qq install -y zstd rsync file unzip
+
+    - name: Download imagebuilder artifact
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        RID="${{ inputs.run_id }}"
+        NAME="${{ inputs.artifact_name }}"
+        AID=$(curl -s -H "Authorization: Bearer $GH_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RID/artifacts" \
+          | jq -r --arg n "$NAME" '.artifacts[] | select(.name==$n) | .id' | head -n1)
+        echo "artifact id: $AID"
+        [ -n "$AID" ] || { echo "::error::artifact '$NAME' not found in run $RID"; exit 1; }
+        curl -sSL -H "Authorization: Bearer $GH_TOKEN" -o art.zip \
+          "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$AID/zip"
+        ls -lh art.zip
+        mkdir -p ib
+        unzip -q art.zip -d ib
+        find ib -maxdepth 2 -name 'kwrt-imagebuilder-*.tar.zst' -printf '%p %s\n'
+
+    - name: Extract imagebuilder
+      run: |
+        set -e
+        TB=$(find ib -name 'kwrt-imagebuilder-*.tar.zst' | head -n1)
+        [ -n "$TB" ] || { echo "::error::no imagebuilder tarball"; exit 1; }
+        echo "tarball: $TB"
+        mkdir -p builder
+        tar -I zstd -xf "$TB" -C builder
+        cd builder
+        if [ ! -f Makefile ]; then
+          inner=$(ls -d */ | head -n1)
+          echo "flattening $inner"
+          shopt -s dotglob
+          mv "$inner"* .
+          rmdir "$inner"
+        fi
+        ls -lh Makefile
+        echo "IB=$PWD" >> $GITHUB_ENV
+
+    - name: Make image
+      run: |
+        set -e
+        cd "$IB"
+        PKGS=$(grep -v '^[[:space:]]*$' "$GITHUB_WORKSPACE/devices/qualcommax_ipq60xx/imagebuilder-packages.txt" | tr '\n' ' ')
+        echo "package count: $(echo $PKGS | wc -w)"
+        make image PROFILE=${{ inputs.profile }} PACKAGES="$PKGS" -j$(nproc)
+        echo "=== result ==="
+        ls -lh bin/targets/*/*/
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@main
+      with:
+        name: rebuilt_${{ inputs.profile }}
+        path: |
+          ${{ env.IB }}/bin/targets/*/*/*.bin
+          ${{ env.IB }}/bin/targets/*/*/*.itb
+          ${{ env.IB }}/bin/targets/*/*/*.manifest
+
+    - name: Upload release
+      uses: softprops/action-gh-release@master
+      continue-on-error: true
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        files: |
+          ${{ env.IB }}/bin/targets/*/*/*.bin
+          ${{ env.IB }}/bin/targets/*/*/*.itb
+          ${{ env.IB }}/bin/targets/*/*/*.manifest
+        tag_name: rebuild-${{ inputs.profile }}
+        name: Rebuilt ${{ inputs.profile }} (imagebuilder)
+        body: |
+          - 由 imagebuilder 重新打包, 未重新编译
+          - profile: `${{ inputs.profile }}`
+          - 来源 run: `${{ inputs.run_id }}`

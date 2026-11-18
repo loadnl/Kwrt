@@ -263,7 +263,12 @@ jobs:
         cd openwrt/bin/targets/*/*/
         cp $GITHUB_WORKSPACE/openwrt/.config ${{ matrix.target }}.config || true
         cp $GITHUB_WORKSPACE/openwrt/build_dir/target-*/linux-*/linux-*/.config ${{ matrix.target }}_kernel.config || true
-        rm -rf kwrt-!(*imagebuilder*)
+        # 上游这行是 rm -rf kwrt-!(*imagebuilder*), 意图是只留下 imagebuilder 本体。
+        # 但本 fork 的固件镜像文件名同样是 kwrt- 开头, 会被这条通配一并删掉,
+        # 结果 Release / Artifact 里只剩下配置文件和 imagebuilder(上一轮就是这么丢掉 .bin/.itb 的)。
+        # 这里只清理 imagebuilder 自带的 ipk 仓库, 固件与 imagebuilder 本体都保留。
+        rm -rf 6.*/ || true
+        ls -lh
 
     - name: Upload firmware for artifact
       uses: actions/upload-artifact@main
