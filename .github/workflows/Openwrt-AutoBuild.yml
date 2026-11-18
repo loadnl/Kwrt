@@ -215,7 +215,8 @@ jobs:
         for sym in \
           "CONFIG_TARGET_qualcommax_ipq60xx=y" \
           "CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_redmi_ax5-jdcloud=y" \
-          "CONFIG_PACKAGE_luci-app-open-box=y" ; do
+          "CONFIG_PACKAGE_kmod-nft-queue=y" \
+          "CONFIG_PACKAGE_kmod-veth=y" ; do
           if grep -qx "$sym" .config; then
             echo "OK   $sym"
           else
@@ -284,12 +285,13 @@ jobs:
           openwrt/bin/targets/*/*/*.itb
           openwrt/bin/targets/*/*/sha256sums
           openwrt/bin/targets/*/*/*.config
-        name: Kwrt ${{ env.date2 }} ${{ matrix.target }} (Open-Box)
+        name: Kwrt ${{ env.date2 }} ${{ matrix.target }}
         tag_name: ${{ env.date3 }}_${{ matrix.target }}
         body: |
           - 目标: `${{ matrix.target }}` (Redmi AX5 JDCloud)
-          - 已内置插件: **Open-Box** (`luci-app-open-box`)
+          - 版本: Kwrt 25.12 (上游原版插件集, 无 Open-Box)
           - 日期: ${{ env.date2 }}
+          - rootfs 分区只有 113MB, 请勿把 Open-Box 之类的大插件编进镜像
 
     - name: Remove old Releases
       uses: dev-drprasad/delete-older-releases@master
