@@ -35,3 +35,34 @@
 - [GitHub Actions](https://github.com/features/actions)
 
 
+
+---
+
+## 本 fork 的定制说明 (loadnl/Kwrt)
+
+基于 [kiddin9/Kwrt](https://github.com/kiddin9/Kwrt) `25.12` 分支，定向用于 **Redmi AX5 JDCloud**（`qualcommax/ipq60xx`，设备 `redmi_ax5-jdcloud`），并内置互联网插件 **Open-Box**（`luci-app-open-box`）。
+
+### 怎么编译
+
+1. 打开仓库的 **Actions** → 左侧 **Build OpenWrt** → 右侧 **Run workflow**
+2. `target` 保持默认 `qualcommax_ipq60xx` 即可（也可填 `devices/` 下的其它目录名）
+3. `action` 留空；需要忽略编译缓存时填 `nocache`
+4. 单次构建约 100–150 分钟
+
+产物位置：
+
+- **Releases**：`Kwrt <日期> qualcommax_ipq60xx (Open-Box)`，附件为 `.bin` 固件 + `sha256sums`
+- **Actions → 运行记录 → Artifacts**：完整 `bin/targets` 目录
+
+### 定制内容
+
+| 文件 | 说明 |
+| --- | --- |
+| `.github/workflows/Openwrt-AutoBuild.yml` | 改为 `workflow_dispatch` 手动触发；只用内置 `GITHUB_TOKEN`，无需配置任何 secret；新增配置校验步骤 |
+| `devices/qualcommax_ipq60xx/.config` | 只编译 `redmi_ax5-jdcloud` 单个设备；打开 `luci-app-open-box` 及其依赖 |
+| `devices/qualcommax_ipq60xx/settings.ini` | 固件同时上传 artifact 与 release |
+| `devices/common/diy.sh` | 上游包仓库 CI 等待改为最多 10 分钟，避免构建卡死 |
+
+### 同步上游
+
+上游默认分支会持续更新（`25.12`）。同步时把 `devices/common`、`.github/workflows` 与本 fork 的定制改动合并即可，注意保留上面表格里的三处定制。
