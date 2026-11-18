@@ -4,7 +4,7 @@
 # 背景: Openwrt-AutoBuild.yml 的 "Organize files" 步骤里,
 # 上游的 rm -rf kwrt-!(*imagebuilder*) 会把固件镜像一起删掉,
 # 导致 artifact / release 里只有 imagebuilder 与配置文件。
-# 编译已经完成, 直接拿 imagebuilder 出镜像只要几分钟。
+# 编译本身已经成功, 直接用 imagebuilder 出镜像只要几分钟。
 #=================================================
 
 name: Rebuild From Imagebuilder
@@ -41,7 +41,9 @@ jobs:
     - name: Install deps
       run: |
         sudo apt-get -qq update
-        sudo apt-get -qq install -y zstd rsync file unzip
+        sudo apt-get -qq install -y zstd rsync file unzip gawk
+        sudo update-alternatives --set awk /usr/bin/gawk
+        awk --version | head -n1
 
     - name: Download imagebuilder artifact
       env:
@@ -79,6 +81,8 @@ jobs:
           rmdir "$inner"
         fi
         ls -lh Makefile
+        python3 "$GITHUB_WORKSPACE/.github/scripts/fix-ib-rootfs.py" "$PWD/include/rootfs.mk"
+        grep -n 'awk -i inplace' include/rootfs.mk
         echo "IB=$PWD" >> $GITHUB_ENV
 
     - name: Make image
