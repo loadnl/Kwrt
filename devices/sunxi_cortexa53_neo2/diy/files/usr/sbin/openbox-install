@@ -36,7 +36,7 @@ done
 
 ARCH="$(uname -m)"
 case "$ARCH" in
-	aarch64|arm64) ;;
+	aarch64|arm64|x86_64|amd64) ;;
 	*) echo "错误: Open-Box 路由器端只提供 x86_64 / aarch64 安装包, 当前是 $ARCH" >&2; exit 1 ;;
 esac
 
