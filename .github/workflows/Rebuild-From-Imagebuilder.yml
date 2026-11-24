@@ -24,6 +24,10 @@ on:
         description: 'imagebuilder profile'
         required: true
         default: 'redmi_ax5-jdcloud'
+      packages_file:
+        description: '追加软件包清单 (仓库内相对路径)'
+        required: true
+        default: 'devices/qualcommax_ipq60xx/imagebuilder-packages.txt'
 
 permissions:
   contents: write
@@ -89,7 +93,7 @@ jobs:
       run: |
         set -e
         cd "$IB"
-        PKGS=$(grep -v '^[[:space:]]*$' "$GITHUB_WORKSPACE/devices/qualcommax_ipq60xx/imagebuilder-packages.txt" | tr '\n' ' ')
+        PKGS=$(grep -v '^[[:space:]]*$' "$GITHUB_WORKSPACE/${{ inputs.packages_file }}" | tr '\n' ' ')
         echo "package count: $(echo $PKGS | wc -w)"
         make image PROFILE=${{ inputs.profile }} PACKAGES="$PKGS" -j$(nproc)
         echo "=== result ==="
@@ -102,6 +106,8 @@ jobs:
         path: |
           ${{ env.IB }}/bin/targets/*/*/*.bin
           ${{ env.IB }}/bin/targets/*/*/*.itb
+          ${{ env.IB }}/bin/targets/*/*/*.img
+          ${{ env.IB }}/bin/targets/*/*/*.img.gz
           ${{ env.IB }}/bin/targets/*/*/*.manifest
 
     - name: Upload release
@@ -113,6 +119,8 @@ jobs:
         files: |
           ${{ env.IB }}/bin/targets/*/*/*.bin
           ${{ env.IB }}/bin/targets/*/*/*.itb
+          ${{ env.IB }}/bin/targets/*/*/*.img
+          ${{ env.IB }}/bin/targets/*/*/*.img.gz
           ${{ env.IB }}/bin/targets/*/*/*.manifest
         tag_name: rebuild-${{ inputs.profile }}
         name: Rebuilt ${{ inputs.profile }} (imagebuilder)

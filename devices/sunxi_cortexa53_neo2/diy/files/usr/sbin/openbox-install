@@ -1,0 +1,87 @@
+#!/bin/sh
+# Open-Box 一键安装 (预置在固件里, /usr/sbin/openbox-install)
+#
+# 本固件只预置 Open-Box 的运行依赖 (kmod-tun / kmod-nft-queue / kmod-nft-nat /
+# kmod-veth / ip-full / ca-bundle), 安装包本身由官方脚本在线下载约 50MB。
+# 不把 Open-Box 打进镜像的原因: 它的自有程序闭源, 许可证禁止再分发。
+set -eu
+
+PANEL_PORT="${OPENBOX_PORT:-3036}"
+FETCH_MODE="auto"
+
+usage() {
+	cat <<'EOF'
+用法: openbox-install [选项]
+
+  -p, --port <端口>   面板端口, 默认 3036
+      --mirror        走 gh-proxy 镜像下载脚本与安装包
+      --direct        只走 GitHub 直连
+  -h, --help          显示本帮助
+
+装完用浏览器打开 http://<路由器地址>:<端口>, 首次访问设置面板密码。
+EOF
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-p|--port)
+			[ $# -ge 2 ] || { echo "错误: --port 后面要跟端口号" >&2; exit 2; }
+			PANEL_PORT="$2"; shift 2 ;;
+		--mirror) FETCH_MODE="mirror"; shift ;;
+		--direct) FETCH_MODE="direct"; shift ;;
+		-h|--help) usage; exit 0 ;;
+		*) echo "错误: 不认识的参数 $1" >&2; usage >&2; exit 2 ;;
+	esac
+done
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+	aarch64|arm64) ;;
+	*) echo "错误: Open-Box 路由器端只提供 x86_64 / aarch64 安装包, 当前是 $ARCH" >&2; exit 1 ;;
+esac
+
+if ! command -v curl >/dev/null 2>&1; then
+	echo "错误: 缺少 curl, 请先执行 opkg update && opkg install curl" >&2
+	exit 1
+fi
+
+# 依赖自检: 本固件已内置这些, 换成别的固件时可能缺, 缺了只提示不阻断
+missing=""
+[ -e /dev/net/tun ] || {
+	modprobe tun >/dev/null 2>&1 || true
+	[ -e /dev/net/tun ] || missing="$missing kmod-tun"
+}
+[ -d /sys/module/nft_queue ] || modprobe nft_queue >/dev/null 2>&1 || missing="$missing kmod-nft-queue"
+[ -d /sys/module/nft_redir ] || modprobe nft_redir >/dev/null 2>&1 || missing="$missing kmod-nft-nat"
+[ -d /sys/module/veth ] || modprobe veth >/dev/null 2>&1 || missing="$missing kmod-veth"
+ip netns list >/dev/null 2>&1 || missing="$missing ip-full"
+[ -s /etc/ssl/certs/ca-certificates.crt ] || missing="$missing ca-bundle"
+if [ -n "$missing" ]; then
+	echo "警告: 缺少$missing —— 不影响安装, 但 Open-Box 对应功能会降级" >&2
+fi
+
+RAW="raw.githubusercontent.com/liandu2024/Open-Box/main/scripts/install.sh"
+DIRECT_URL="https://$RAW"
+MIRROR_URL="https://gh-proxy.com/$RAW"
+
+run_installer() {
+	_url="$1"
+	shift
+	echo "[openbox-install] 获取安装脚本: $_url"
+	curl -fsSL --connect-timeout 15 "$_url" | sh -s -- "$@"
+}
+
+case "$FETCH_MODE" in
+	direct)
+		run_installer "$DIRECT_URL" --port "$PANEL_PORT"
+		;;
+	mirror)
+		run_installer "$MIRROR_URL" --mirror --port "$PANEL_PORT"
+		;;
+	auto)
+		run_installer "$DIRECT_URL" --port "$PANEL_PORT" || {
+			echo "[openbox-install] 直连失败, 改用镜像重试 ..." >&2
+			run_installer "$MIRROR_URL" --mirror --port "$PANEL_PORT"
+		}
+		;;
+esac

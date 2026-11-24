@@ -1,0 +1,6 @@
+# 编译前的配置自检清单 (每行一个 .config 里必须精确出现的行, # 开头为注释)
+# 由 .github/workflows/Openwrt-AutoBuild.yml 的 "Verify configuration" 步骤读取
+CONFIG_TARGET_qualcommax_ipq60xx=y
+CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_redmi_ax5-jdcloud=y
+CONFIG_PACKAGE_kmod-nft-queue=y
+CONFIG_PACKAGE_kmod-veth=y

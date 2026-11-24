@@ -6,8 +6,9 @@
 # Blog: https://p3terx.com
 #
 # 个人 fork 定制 (loadnl/Kwrt):
-#   - 默认目标: qualcommax_ipq60xx -> Redmi AX5 JDCloud (redmi_ax5-jdcloud)
-#   - 触发方式: Actions 页面手动 Run workflow, 或 repository_dispatch
+#   - 目标一: qualcommax_ipq60xx -> Redmi AX5 JDCloud (redmi_ax5-jdcloud)
+#   - 目标二: sunxi_cortexa53_neo2 -> FriendlyARM NanoPi NEO2 (friendlyarm_nanopi-neo2)
+#   - 触发方式: Actions 页面手动 Run workflow (下拉选目标), 或 repository_dispatch
 #   - 只使用 GitHub 内置 GITHUB_TOKEN, 不需要配置任何 secret
 #=================================================
 
@@ -19,7 +20,11 @@ on:
       target:
         description: '编译目标 (devices/ 下的目录名)'
         required: true
+        type: choice
         default: 'qualcommax_ipq60xx'
+        options:
+          - 'qualcommax_ipq60xx'
+          - 'sunxi_cortexa53_neo2'
       action:
         description: '附加参数, 可留空 (例如 nocache 强制不使用编译缓存)'
         required: false
@@ -66,6 +71,19 @@ jobs:
         echo "UPLOAD_BIN_DIR_FOR_ARTIFACT=${UPLOAD_BIN_DIR_FOR_ARTIFACT}" >> $GITHUB_ENV
         echo "UPLOAD_FIRMWARE_FOR_ARTIFACT=${UPLOAD_FIRMWARE_FOR_ARTIFACT}" >> $GITHUB_ENV
         echo "UPLOAD_FIRMWARE_FOR_RELEASE=${UPLOAD_FIRMWARE_FOR_RELEASE}" >> $GITHUB_ENV
+
+    - name: Prepare release note
+      run: |
+        NOTE_FILE="devices/${{ matrix.target }}/release-note.txt"
+        if [ -f "$NOTE_FILE" ]; then
+          {
+            echo 'RELEASE_NOTE<<__NOTE_EOF__'
+            cat "$NOTE_FILE"
+            echo '__NOTE_EOF__'
+          } >> "$GITHUB_ENV"
+        else
+          echo "RELEASE_NOTE=- 目标: \`${{ matrix.target }}\`" >> "$GITHUB_ENV"
+        fi
 
     - name: Free disk space
       uses: coder-xiaomo/free-disk-space@main
@@ -211,22 +229,24 @@ jobs:
     - name: Verify configuration
       run: |
         cd openwrt
+        CHK="devices/${{ matrix.target }}/config-check.txt"
+        if [ ! -f "$CHK" ]; then
+          echo "没有 $CHK, 跳过配置自检"
+          exit 0
+        fi
         fail=0
-        for sym in \
-          "CONFIG_TARGET_qualcommax_ipq60xx=y" \
-          "CONFIG_TARGET_DEVICE_qualcommax_ipq60xx_DEVICE_redmi_ax5-jdcloud=y" \
-          "CONFIG_PACKAGE_kmod-nft-queue=y" \
-          "CONFIG_PACKAGE_kmod-veth=y" ; do
-          if grep -qx "$sym" .config; then
+        while IFS= read -r sym || [ -n "$sym" ]; do
+          case "$sym" in ''|\#*) continue ;; esac
+          if grep -qxF "$sym" .config; then
             echo "OK   $sym"
           else
             echo "::error::missing in .config -> $sym"
             fail=1
           fi
-        done
+        done < "$CHK"
         if [ "$fail" != "0" ]; then
           echo "--- 相关配置行 ---"
-          grep -iE 'ax5|open-box|TARGET_ALL_PROFILES|TARGET_MULTI_PROFILE' .config || true
+          grep -iE 'TARGET_DEVICE|TARGET_MULTI_PROFILE|open-box|kmod-tun|kmod-veth' .config || true
           exit 1
         fi
 
@@ -288,15 +308,17 @@ jobs:
         files: |
           openwrt/bin/targets/*/*/*.bin
           openwrt/bin/targets/*/*/*.itb
+          openwrt/bin/targets/*/*/*.img
+          openwrt/bin/targets/*/*/*.img.gz
           openwrt/bin/targets/*/*/sha256sums
           openwrt/bin/targets/*/*/*.config
         name: Kwrt ${{ env.date2 }} ${{ matrix.target }}
         tag_name: ${{ env.date3 }}_${{ matrix.target }}
         body: |
-          - 目标: `${{ matrix.target }}` (Redmi AX5 JDCloud)
-          - 版本: Kwrt 25.12 (上游原版插件集, 无 Open-Box)
+          - 目标: `${{ matrix.target }}`
+          - 版本: Kwrt 25.12
           - 日期: ${{ env.date2 }}
-          - rootfs 分区只有 113MB, 请勿把 Open-Box 之类的大插件编进镜像
+          ${{ env.RELEASE_NOTE }}
 
     - name: Remove old Releases
       uses: dev-drprasad/delete-older-releases@master

@@ -1,0 +1,6 @@
+- 设备: FriendlyARM NanoPi NEO2 (Allwinner H5 / aarch64 / 512MB 或 1GB)
+- 镜像: `ext4-sdcard.img.gz`, rootfs 分区 1004MB, 用 balenaEtcher / Rufus 写卡后直接启动
+- 默认地址: `10.0.0.1`, 用户 `root`, 无密码 (首次登录请先改密码)
+- 已内置 Open-Box 依赖: `kmod-tun` `kmod-nft-queue` `kmod-nft-nat` `kmod-veth` `ip-full` `ca-bundle`
+- 安装 Open-Box: SSH 登录后执行 `openbox-install` (可加 `--port 3080` / `--mirror`)
+- Open-Box 本体不打包进镜像: 自有程序闭源且许可证禁止再分发, 官方安装脚本需要联网下载约 50MB 安装包
