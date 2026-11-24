@@ -11,3 +11,7 @@ sed -i 's/Os/O2/g' include/target.mk
 
 # 该 target 的默认包: SD 卡分区/挂载工具 + USB 网卡驱动 (NEO2 只有一个原生千兆口)
 sed -i 's/DEFAULT_PACKAGES +=/DEFAULT_PACKAGES += fdisk lsblk kmod-usb-net-asix-ax88179 kmod-usb-net-rtl8152/' target/linux/sunxi/Makefile
+
+# 兜底: 在 Windows 上提交时 git 容易丢可执行位, 这里补一次
+# (本脚本之后才会执行 cp -Rf ./diy/* ./, 所以改的是将要被拷进 rootfs 的那一份)
+chmod +x diy/files/usr/sbin/openbox-install 2>/dev/null || true
